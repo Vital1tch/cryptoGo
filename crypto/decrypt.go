@@ -10,8 +10,16 @@ import (
 	"strings"
 )
 
-func DecryptFile(inputPath, outputPath, key string) error {
+func DecryptFile(inputPath, outputPath, keyPath string) error {
 	log.Println("Начало расшифровки файла:", inputPath)
+
+	// Загрузка ключа
+	key, err := LoadKey(keyPath)
+	if err != nil {
+		log.Println("Ошибка загрузки ключа:", err)
+		return err
+	}
+	log.Println("Ключ успешно загружен из:", keyPath)
 
 	// Чтение зашифрованного файла
 	inputFile, err := os.Open(inputPath)
@@ -28,13 +36,6 @@ func DecryptFile(inputPath, outputPath, key string) error {
 	}
 	log.Println("Зашифрованный файл успешно прочитан, размер данных:", len(ciphertext))
 
-	// Проверка длины ключа
-	if len(key) != 16 && len(key) != 24 && len(key) != 32 {
-		err := errors.New("длина ключа должна быть 16, 24 или 32 байта")
-		log.Println("Ошибка ключа:", err)
-		return err
-	}
-
 	if len(ciphertext) < 12 {
 		err := errors.New("недостаточная длина зашифрованных данных")
 		log.Println("Ошибка расшифровки:", err)
@@ -45,7 +46,7 @@ func DecryptFile(inputPath, outputPath, key string) error {
 	ciphertext = ciphertext[12:]
 
 	// Расшифровка данных
-	block, err := aes.NewCipher([]byte(key))
+	block, err := aes.NewCipher(key)
 	if err != nil {
 		log.Println("Ошибка создания AES блока:", err)
 		return err

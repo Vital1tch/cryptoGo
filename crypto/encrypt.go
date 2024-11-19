@@ -4,15 +4,50 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
-	"errors"
+	"encoding/hex"
 	"io"
 	"log"
 	"os"
 	"path/filepath"
 )
 
-func EncryptFile(inputPath, outputPath, key string) error {
+func GenerateKey() ([]byte, error) {
+	key := make([]byte, 32) // Генерируем 256-битный ключ
+	if _, err := rand.Read(key); err != nil {
+		return nil, err
+	}
+	return key, nil
+}
+
+func SaveKey(key []byte, keyPath string) error {
+	return os.WriteFile(keyPath, []byte(hex.EncodeToString(key)), 0600) // Сохраняем в hex-формате
+}
+
+func LoadKey(keyPath string) ([]byte, error) {
+	data, err := os.ReadFile(keyPath)
+	if err != nil {
+		return nil, err
+	}
+	return hex.DecodeString(string(data))
+}
+
+func EncryptFile(inputPath, outputPath, keyPath string) error {
 	log.Println("Начало шифрования файла:", inputPath)
+
+	// Генерация ключа
+	key, err := GenerateKey()
+	if err != nil {
+		log.Println("Ошибка генерации ключа:", err)
+		return err
+	}
+
+	// Сохранение ключа
+	err = SaveKey(key, keyPath)
+	if err != nil {
+		log.Println("Ошибка сохранения ключа:", err)
+		return err
+	}
+	log.Println("Ключ успешно сохранен в:", keyPath)
 
 	// Чтение содержимого файла
 	inputFile, err := os.Open(inputPath)
@@ -29,15 +64,19 @@ func EncryptFile(inputPath, outputPath, key string) error {
 	}
 	log.Println("Файл успешно прочитан, размер данных:", len(data))
 
-	// Проверка длины ключа
-	if len(key) != 16 && len(key) != 24 && len(key) != 32 {
-		err := errors.New("длина ключа должна быть 16, 24 или 32 байта")
-		log.Println("Ошибка ключа:", err)
-		return err
+	// Получение расширения файла
+	extension := filepath.Ext(inputPath)
+	if extension == "" {
+		extension = ".bin" // По умолчанию, если расширение отсутствует
 	}
+	log.Println("Расширение файла:", extension)
+
+	// Добавляем расширение файла к шифрованным данным
+	metadata := []byte(extension + "\n") // Сохраняем расширение в первых байтах файла
+	dataWithMetadata := append(metadata, data...)
 
 	// Шифрование данных
-	block, err := aes.NewCipher([]byte(key))
+	block, err := aes.NewCipher(key)
 	if err != nil {
 		log.Println("Ошибка создания AES блока:", err)
 		return err
@@ -55,16 +94,7 @@ func EncryptFile(inputPath, outputPath, key string) error {
 		return err
 	}
 
-	// Получение расширения файла
-	extension := filepath.Ext(inputPath)
-	if extension == "" {
-		extension = ".bin" // По умолчанию, если у файла нет расширения
-	}
-	log.Println("Расширение файла:", extension)
-
-	// Добавляем расширение файла к шифрованным данным
-	metadata := []byte(extension + "\n") // Сохраняем расширение в начале
-	ciphertext := aesGCM.Seal(nonce, nonce, append(metadata, data...), nil)
+	ciphertext := aesGCM.Seal(nonce, nonce, dataWithMetadata, nil)
 
 	// Запись зашифрованных данных в новый файл
 	outputFile, err := os.Create(outputPath)

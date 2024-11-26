@@ -4,9 +4,17 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/widget"
 	"os"
 )
+
+func truncatePath(path string, maxLength int) string {
+	if len(path) > maxLength {
+		return path[:maxLength] + "..."
+	}
+	return path
+}
 
 func StartApp() {
 	myApp := app.New()
@@ -16,12 +24,30 @@ func StartApp() {
 	title := widget.NewLabel("Добро пожаловать в CryptoApp!")
 
 	encryptButton := widget.NewButton("Зашифровать", func() {
-		HandleEncrypt(myWindow)
 	})
 
 	decryptButton := widget.NewButton("Расшифровать", func() {
-		HandleDecrypt(myWindow)
 	})
+
+	// Связываем список файлов с отображением в UI
+	fileListData := binding.NewStringList()
+
+	encryptButton.OnTapped = func() {
+		HandleEncrypt(myWindow, fileListData)
+	}
+
+	decryptButton.OnTapped = func() {
+		HandleDecrypt(myWindow, fileListData)
+	}
+
+	// Список для отображения файлов
+	filesList := widget.NewListWithData(fileListData,
+		func() fyne.CanvasObject {
+			return widget.NewLabel("File info")
+		},
+		func(i binding.DataItem, o fyne.CanvasObject) {
+			o.(*widget.Label).Bind(i.(binding.String))
+		})
 
 	status := widget.NewLabel("")
 
@@ -31,9 +57,8 @@ func StartApp() {
 		decryptButton,
 		status,
 	)
-
-	myWindow.SetContent(content)
-	myWindow.Resize(fyne.NewSize(400, 200))
+	myWindow.SetContent(container.NewBorder(content, nil, nil, nil, filesList))
+	myWindow.Resize(fyne.NewSize(600, 400))
 	myWindow.ShowAndRun()
 }
 

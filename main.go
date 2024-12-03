@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	gui.EnsureDirectories()
+	gui.StartApp()
 
 	// Временная проверка содержимого папки ./encrypted
 	files, err := os.ReadDir("./encrypted")

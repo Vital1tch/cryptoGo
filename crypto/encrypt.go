@@ -4,32 +4,11 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
-	"encoding/hex"
 	"io"
 	"log"
 	"os"
 	"path/filepath"
 )
-
-func GenerateKey() ([]byte, error) {
-	key := make([]byte, 32) // Генерируем 256-битный ключ
-	if _, err := rand.Read(key); err != nil {
-		return nil, err
-	}
-	return key, nil
-}
-
-func SaveKey(key []byte, keyPath string) error {
-	return os.WriteFile(keyPath, []byte(hex.EncodeToString(key)), 0600) // Сохраняем в hex-формате
-}
-
-func LoadKey(keyPath string) ([]byte, error) {
-	data, err := os.ReadFile(keyPath)
-	if err != nil {
-		return nil, err
-	}
-	return hex.DecodeString(string(data))
-}
 
 func EncryptFile(inputPath, outputPath, keyPath string) error {
 	log.Println("Начало шифрования файла:", inputPath)

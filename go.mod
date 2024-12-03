@@ -2,7 +2,10 @@ module cryptoGo
 
 go 1.22.6
 
-require fyne.io/fyne/v2 v2.5.2
+require (
+	fyne.io/fyne/v2 v2.5.2
+	golang.org/x/crypto v0.23.0
+)
 
 require (
 	fyne.io/systray v1.11.0 // indirect

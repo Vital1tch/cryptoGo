@@ -7,18 +7,23 @@ import (
 )
 
 func main() {
-	gui.StartApp()
-
-	// Временная проверка содержимого папки ./encrypted
-	files, err := os.ReadDir("./encrypted")
-	if err != nil {
-		log.Fatalf("Не удалось прочитать папку ./encrypted: %v", err)
+	// Функция для проверки и создания директорий
+	createFolderIfNotExists := func(folder string) {
+		if _, err := os.Stat(folder); os.IsNotExist(err) {
+			err := os.MkdirAll(folder, 0755)
+			if err != nil {
+				log.Fatalf("Не удалось создать папку %s: %v", folder, err)
+			}
+			log.Printf("Папка %s была успешно создана.", folder)
+		} else {
+			log.Printf("Папка %s уже существует.", folder)
+		}
 	}
 
-	log.Println("Содержимое папки ./encrypted:")
-	for _, file := range files {
-		log.Printf(" - %s", file.Name())
-	}
+	// Создаём папки encrypted и decrypted, если их нет
+	createFolderIfNotExists("./encrypted")
+	createFolderIfNotExists("./decrypted")
 
+	// Запускаем приложение
 	gui.StartApp()
 }

@@ -5,12 +5,14 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"crypto/sha256"
+	"fmt"
 	"golang.org/x/crypto/pbkdf2"
 	"io"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // Функция для генерации ключа из пароля с использованием PBKDF2
@@ -59,6 +61,30 @@ func EncryptFileWithPassword(inputPath, outputPath, password string) error {
 		return err
 	}
 
+	// Проверяем, существует ли файл
+	ext := filepath.Ext(inputPath)
+	for {
+		if _, err := os.Stat(outputPath); err == nil {
+			log.Printf("Файл %s уже существует. Генерируется новое имя файла и соль.\n", outputPath)
+			timestamp := time.Now().Format("20060102_150405")
+			outputPath = fmt.Sprintf("%s_%s.enc", strings.TrimSuffix(outputPath, ext), timestamp)
+
+			salt, err = GenerateSalt()
+			if err != nil {
+				log.Println("Ошибка генерации новой соли:", err)
+				return err
+			}
+
+			key, err = GenerateKeyFromPassword(password, salt)
+			if err != nil {
+				log.Println("Ошибка генерации нового ключа:", err)
+				return err
+			}
+		} else {
+			break
+		}
+	}
+
 	saltPath := outputPath + ".salt"
 	err = SaveSalt(salt, saltPath)
 	if err != nil {
@@ -97,7 +123,11 @@ func EncryptFileWithPassword(inputPath, outputPath, password string) error {
 		return err
 	}
 
-	ciphertext := aesGCM.Seal(nonce, nonce, data, nil)
+	// Добавляем оригинальное расширение в начало данных
+	metadata := []byte(ext + "\n")
+	dataWithMetadata := append(metadata, data...)
+
+	ciphertext := aesGCM.Seal(nonce, nonce, dataWithMetadata, nil)
 
 	outputFile, err := os.Create(outputPath)
 	if err != nil {
@@ -112,23 +142,12 @@ func EncryptFileWithPassword(inputPath, outputPath, password string) error {
 		return err
 	}
 
-	log.Println("Файл успешно зашифрован:", outputPath)
+	log.Printf("Файл успешно зашифрован: %s, соль сохранена: %s\n", outputPath, saltPath)
 	return nil
 }
 
-// Расшифровка файла с учетом пароля
+// Расшифровка файла
 func DecryptFileWithPassword(inputPath, outputPath, password string) error {
-	// Создание директории для расшифровки, если она не существует
-	outputDir := filepath.Dir(outputPath)
-	if _, err := os.Stat(outputDir); os.IsNotExist(err) {
-		err := os.MkdirAll(outputDir, 0755)
-		if err != nil {
-			log.Println("Ошибка при создании директории для расшифрованного файла:", err)
-			return err
-		}
-	}
-
-	// Загружаем соль
 	saltPath := inputPath + ".salt"
 	salt, err := LoadSalt(saltPath)
 	if err != nil {
@@ -136,14 +155,12 @@ func DecryptFileWithPassword(inputPath, outputPath, password string) error {
 		return err
 	}
 
-	// Генерация ключа из пароля и соли
 	key, err := GenerateKeyFromPassword(password, salt)
 	if err != nil {
 		log.Println("Ошибка генерации ключа:", err)
 		return err
 	}
 
-	// Открытие зашифрованного файла
 	inputFile, err := os.Open(inputPath)
 	if err != nil {
 		log.Println("Ошибка при открытии зашифрованного файла:", err)
@@ -151,57 +168,70 @@ func DecryptFileWithPassword(inputPath, outputPath, password string) error {
 	}
 	defer inputFile.Close()
 
-	// Чтение зашифрованного содержимого
 	ciphertext, err := io.ReadAll(inputFile)
 	if err != nil {
 		log.Println("Ошибка при чтении зашифрованного файла:", err)
 		return err
 	}
 
-	// Создание AES блока с использованием сгенерированного ключа
+	if len(ciphertext) < 12 {
+		log.Println("Ошибка: недостаточная длина зашифрованных данных для извлечения nonce.")
+		return fmt.Errorf("недостаточная длина зашифрованных данных")
+	}
+
+	nonce := ciphertext[:12]
+	ciphertext = ciphertext[12:]
+
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		log.Println("Ошибка создания AES блока:", err)
 		return err
 	}
 
-	// Создание GCM для работы с AES
 	aesGCM, err := cipher.NewGCM(block)
 	if err != nil {
 		log.Println("Ошибка создания GCM:", err)
 		return err
 	}
 
-	// Извлечение nonce из зашифрованного файла
-	nonce := ciphertext[:12]
-	ciphertext = ciphertext[12:]
-
-	// Расшифровка данных
 	plaintext, err := aesGCM.Open(nil, nonce, ciphertext, nil)
 	if err != nil {
 		log.Println("Ошибка при расшифровке данных:", err)
 		return err
 	}
 
-	// Получаем оригинальное расширение файла (до .enc)
-	ext := filepath.Ext(inputPath)
-	originalFilePath := strings.TrimSuffix(inputPath, ext) // Удаляем .enc
+	// Извлекаем оригинальное расширение из данных
+	parts := strings.SplitN(string(plaintext), "\n", 2)
+	if len(parts) < 2 {
+		log.Println("Ошибка: не удалось извлечь метаданные из расшифрованных данных.")
+		return fmt.Errorf("ошибка извлечения метаданных")
+	}
+	ext := parts[0]
+	fileData := []byte(parts[1])
 
-	// Создание выходного файла для расшифрованных данных
-	outputFile, err := os.Create(originalFilePath)
+	// Указываем путь для сохранения расшифрованного файла
+	filename := strings.TrimSuffix(filepath.Base(inputPath), ".enc")
+
+	// Проверяем, есть ли уже расширение в имени файла
+	if !strings.HasSuffix(filename, ext) {
+		outputPath = filepath.Join("./decrypted", filename+ext)
+	} else {
+		outputPath = filepath.Join("./decrypted", filename)
+	}
+
+	outputFile, err := os.Create(outputPath)
 	if err != nil {
 		log.Println("Ошибка создания выходного файла:", err)
 		return err
 	}
 	defer outputFile.Close()
 
-	// Запись расшифрованных данных в файл
-	_, err = outputFile.Write(plaintext)
+	_, err = outputFile.Write(fileData)
 	if err != nil {
 		log.Println("Ошибка записи расшифрованных данных:", err)
 		return err
 	}
 
-	log.Println("Файл успешно расшифрован:", originalFilePath)
+	log.Println("Файл успешно расшифрован:", outputPath)
 	return nil
 }

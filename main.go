@@ -1,12 +1,17 @@
 package main
 
 import (
+	"cryptoGo/data"
 	"cryptoGo/gui"
+	"fyne.io/fyne/v2/app"
 	"log"
 	"os"
 )
 
 func main() {
+	myApp := app.New()
+	myWindow := myApp.NewWindow("CryptoGo")
+
 	// Функция для проверки и создания директорий
 	createFolderIfNotExists := func(folder string) {
 		if _, err := os.Stat(folder); os.IsNotExist(err) {
@@ -20,10 +25,19 @@ func main() {
 		}
 	}
 
+	// Проверяем, установлен ли пароль менеджера
+	if _, err := os.Stat(data.ManagerPasswordFile); os.IsNotExist(err) {
+		log.Println("Пароль менеджера не найден. Пожалуйста, создайте его.")
+		gui.ShowInitialPasswordDialog(myWindow)
+	}
+
 	// Создаём папки encrypted и decrypted, если их нет
 	createFolderIfNotExists("./encrypted")
 	createFolderIfNotExists("./decrypted")
 
+	// Загружаем пароли
+	data.LoadPasswordsFromFile() // Загружаем пароли из файла
+
 	// Запускаем приложение
-	gui.StartApp()
+	gui.StartApp(myWindow)
 }

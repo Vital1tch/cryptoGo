@@ -5,6 +5,7 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"crypto/sha256"
+	"cryptoGo/data"
 	"fmt"
 	"golang.org/x/crypto/pbkdf2"
 	"io"
@@ -39,12 +40,12 @@ func SaveSalt(salt []byte, saltPath string) error {
 
 // Функция для загрузки соли из файла
 func LoadSalt(saltPath string) ([]byte, error) {
-	data, err := os.ReadFile(saltPath)
+	fileData, err := os.ReadFile(saltPath)
 	if err != nil {
 		log.Println("Ошибка загрузки соли:", err)
 		return nil, err
 	}
-	return data, nil
+	return fileData, nil
 }
 
 // Шифрование файла
@@ -99,7 +100,7 @@ func EncryptFileWithPassword(inputPath, outputPath, password string) error {
 	}
 	defer inputFile.Close()
 
-	data, err := io.ReadAll(inputFile)
+	fileData, err := io.ReadAll(inputFile)
 	if err != nil {
 		log.Println("Ошибка при чтении файла:", err)
 		return err
@@ -125,7 +126,7 @@ func EncryptFileWithPassword(inputPath, outputPath, password string) error {
 
 	// Добавляем оригинальное расширение в начало данных
 	metadata := []byte(ext + "\n")
-	dataWithMetadata := append(metadata, data...)
+	dataWithMetadata := append(metadata, fileData...)
 
 	ciphertext := aesGCM.Seal(nonce, nonce, dataWithMetadata, nil)
 
@@ -141,6 +142,12 @@ func EncryptFileWithPassword(inputPath, outputPath, password string) error {
 		log.Println("Ошибка записи зашифрованных данных:", err)
 		return err
 	}
+
+	// После успешного шифрования добавляем пароль в менеджер паролей
+	timestamp := time.Now().Format("02-01-2006 15:04:05")
+	data.AddPassword(filepath.Base(outputPath), password, timestamp)
+
+	log.Printf("Пароль для файла %s добавлен в менеджер паролей.\n", outputPath)
 
 	log.Printf("Файл успешно зашифрован: %s, соль сохранена: %s\n", outputPath, saltPath)
 	return nil

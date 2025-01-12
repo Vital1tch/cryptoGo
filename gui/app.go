@@ -2,9 +2,9 @@ package gui
 
 import (
 	"cryptoGo/crypto"
+	"cryptoGo/data"
 	"errors"
 	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
@@ -38,15 +38,16 @@ func ShowPasswordEntryDialog(title, message string, callback func(password strin
 	dialogForm.Show()
 }
 
-func StartApp() {
+func StartApp(myWindow fyne.Window) {
 	// Загружаем список действий из файла
 	LoadActionsFromFile()
 
-	myApp := app.New()
-	myWindow := myApp.NewWindow("CryptoApp")
+	openManagerButton := widget.NewButton("Менеджер паролей", func() {
+		ShowPasswordManager(myWindow)
+	})
 
 	title := widget.NewLabel("Добро пожаловать в CryptoApp!")
-	description := widget.NewLabel("Вы можете зашифровать и расшифровать свои файлы, используя только пароль!")
+	description := widget.NewLabel("Вы можете зашифровать и расшифровать свои файлы, используя только пароль!\n\nПредупреждение!\nБудьте особенно внимательны с паролем от менеджера паролей, в случае потери пароля все данные о зашифрованных файлах будут удалены!!!")
 	action := widget.NewLabel("Выберите действие ниже:")
 	actionsList := widget.NewLabel("Список взаимодействий с файлами:")
 	en := widget.NewLabel(" ")
@@ -92,6 +93,25 @@ func StartApp() {
 	clearButton := widget.NewButton("Очистить список действий", func() {
 		ClearActionList()
 		actionTable.Refresh() // Обновляем таблицу
+	})
+
+	resetPasswordButton := widget.NewButton("Сбросить пароль", func() {
+		dialog.ShowConfirm("Сбросить пароль", "Вы уверены, что хотите сбросить пароль менеджера и удалить все данные о паролях?", func(confirm bool) {
+			if confirm {
+				// Сбрасываем пароль и очищаем данные
+				err := data.ResetManagerPassword()
+				if err != nil {
+					dialog.ShowError(err, myWindow)
+					return
+				}
+
+				// Показываем уведомление
+				dialog.ShowInformation("Успех", "Пароль менеджера успешно сброшен. Все данные о паролях были удалены. Установите новый пароль.", myWindow)
+
+				// Открываем диалог для установки нового пароля
+				ShowInitialPasswordDialog(myWindow)
+			}
+		}, myWindow)
 	})
 
 	// Кнопки для шифрования и расшифровки
@@ -153,12 +173,62 @@ func StartApp() {
 		description,
 		action,
 		container.NewHBox(encryptButton, decryptButton),
-		en,
 		container.NewHBox(openEncryptedButton, openDecryptedButton),
 		en,
+		container.NewHBox(openManagerButton, resetPasswordButton),
 		actionsList,
 		clearButton,
 		scrollableList, // Добавляем прокручиваемую таблицу
 	))
 	myWindow.ShowAndRun()
+}
+
+// Диалог для установки пароля менеджера при первом запуске или после сброса
+func ShowInitialPasswordDialog(myWindow fyne.Window) {
+	passwordEntry := widget.NewPasswordEntry()
+	passwordEntry.SetPlaceHolder("Введите новый пароль")
+
+	repeatPasswordEntry := widget.NewPasswordEntry()
+	repeatPasswordEntry.SetPlaceHolder("Повторите пароль")
+
+	form := dialog.NewForm(
+		"Установите пароль менеджера",
+		"Сохранить",
+		"Пропустить",
+		[]*widget.FormItem{
+			widget.NewFormItem("Пароль", passwordEntry),
+			widget.NewFormItem("Повтор пароля", repeatPasswordEntry),
+		},
+		func(confirm bool) {
+			if confirm {
+				// Проверяем совпадение паролей
+				if passwordEntry.Text == "" || repeatPasswordEntry.Text == "" {
+					dialog.ShowError(errors.New("Пароль не может быть пустым"), myWindow)
+					ShowInitialPasswordDialog(myWindow) // Повторяем диалог
+					return
+				}
+
+				if passwordEntry.Text != repeatPasswordEntry.Text {
+					dialog.ShowError(errors.New("Пароли не совпадают"), myWindow)
+					ShowInitialPasswordDialog(myWindow) // Повторяем диалог
+					return
+				}
+
+				// Сохраняем пароль
+				err := data.SetManagerPassword(passwordEntry.Text)
+				if err != nil {
+					dialog.ShowError(err, myWindow)
+					return
+				}
+
+				dialog.ShowInformation("Успех", "Пароль менеджера успешно установлен!", myWindow)
+			} else {
+				dialog.ShowError(errors.New("Установка пароля обязательна для продолжения"), myWindow)
+				ShowInitialPasswordDialog(myWindow) // Повторяем диалог, если пользователь нажал "Пропустить"
+			}
+		},
+		myWindow,
+	)
+	form.Resize(fyne.NewSize(400, 300))
+	form.Show()
 }

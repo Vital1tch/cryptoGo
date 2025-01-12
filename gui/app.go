@@ -9,6 +9,7 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 	"path/filepath"
+	"strings"
 )
 
 // Функция для отображения диалога ввода пароля
@@ -42,17 +43,15 @@ func StartApp() {
 
 	title := widget.NewLabel("Добро пожаловать в CryptoApp!")
 
+	// Кнопка для шифрования
 	encryptButton := widget.NewButton("Зашифровать", func() {
 		ShowPasswordEntryDialog(
-			"Введите пароль",
-			"Пароль для шифрования",
+			"Введите пароль", "Пароль для шифрования",
 			func(password string) {
 				if password == "" {
 					dialog.ShowError(errors.New("Пароль не может быть пустым"), myWindow)
 					return
 				}
-
-				// Открыть диалог выбора файла
 				OpenFile(myWindow, func(inputPath string) {
 					filename := filepath.Base(inputPath)
 					outputPath := filepath.Join("./encrypted", filename+".enc")
@@ -63,28 +62,21 @@ func StartApp() {
 					}
 					dialog.ShowInformation("Успех", "Файл успешно зашифрован!", myWindow)
 				})
-			},
-			myWindow,
-		)
+			}, myWindow)
 	})
 
 	// Кнопка для расшифровки
 	decryptButton := widget.NewButton("Расшифровать", func() {
 		ShowPasswordEntryDialog(
-			"Введите пароль",
-			"Пароль для расшифровки",
+			"Введите пароль", "Пароль для расшифровки",
 			func(password string) {
 				if password == "" {
 					dialog.ShowError(errors.New("Пароль не может быть пустым"), myWindow)
 					return
 				}
-
-				// Открыть диалог выбора зашифрованного файла
-				OpenFile(myWindow, func(inputPath string) {
+				OpenFileFromDirectory(myWindow, "./encrypted", func(inputPath string) {
 					filename := filepath.Base(inputPath)
-					outputPath := filepath.Join("./decrypted", filename+".dec")
-
-					// Вызов функции расшифровки с введенным паролем
+					outputPath := filepath.Join("./decrypted", strings.TrimSuffix(filename, ".enc"))
 					err := crypto.DecryptFileWithPassword(inputPath, outputPath, password)
 					if err != nil {
 						dialog.ShowError(err, myWindow)
@@ -92,9 +84,7 @@ func StartApp() {
 					}
 					dialog.ShowInformation("Успех", "Файл успешно расшифрован!", myWindow)
 				})
-			},
-			myWindow,
-		)
+			}, myWindow)
 	})
 
 	myWindow.SetContent(container.NewVBox(title, encryptButton, decryptButton))

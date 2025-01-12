@@ -1,9 +1,11 @@
 package gui
 
 import (
-	"cryptoGo/crypto"
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/widget"
+	"os"
 )
 
 // Открытие диалога для выбора файла
@@ -22,22 +24,36 @@ func OpenFile(window fyne.Window, onFileSelected func(path string)) {
 	}, window)
 }
 
-// Шифрование с паролем
-func HandleEncryptWithPassword(window fyne.Window, password string, inputPath string, outputPath string) {
-	err := crypto.EncryptFileWithPassword(inputPath, outputPath, password)
+// Открытие диалога для выбора файла из заданной директории
+func OpenFileFromDirectory(window fyne.Window, directory string, onFileSelected func(path string)) {
+	files, err := os.ReadDir(directory)
 	if err != nil {
 		dialog.ShowError(err, window)
 		return
 	}
-	dialog.ShowInformation("Успех", "Файл зашифрован успешно!", window)
-}
 
-// Расшифровка с паролем
-func HandleDecryptWithPassword(window fyne.Window, password string, inputPath string, outputPath string) {
-	err := crypto.DecryptFileWithPassword(inputPath, outputPath, password)
-	if err != nil {
-		dialog.ShowError(err, window)
+	// Создаем список файлов для выбора
+	fileOptions := []string{}
+	for _, file := range files {
+		if !file.IsDir() {
+			fileOptions = append(fileOptions, file.Name())
+		}
+	}
+
+	// Если нет файлов
+	if len(fileOptions) == 0 {
+		dialog.ShowInformation("Информация", "Нет файлов для выбора", window)
 		return
 	}
-	dialog.ShowInformation("Успех", "Файл расшифрован успешно!", window)
+
+	// Диалог выбора файла
+	dialog.ShowCustom("Выберите файл", "Отмена",
+		container.NewVBox( // Заменяем widget.NewVBox на container.NewVBox
+			widget.NewLabel("Доступные файлы:"),
+			widget.NewSelect(fileOptions, func(selected string) {
+				if selected != "" {
+					onFileSelected(directory + "/" + selected)
+				}
+			}),
+		), window)
 }
